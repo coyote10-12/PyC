@@ -8,42 +8,49 @@
 </head>
 <body>
     <div class="container">
-        <div class="calculator">
-            <h1>Advanced Calculator</h1>
-            <input type="text" id="display" class="display" readonly placeholder="0">
-            <div class="buttons">
-                <button class="btn function-btn" onclick="appendFunction('sin(')">sin</button>
-                <button class="btn function-btn" onclick="appendFunction('cos(')">cos</button>
-                <button class="btn function-btn" onclick="appendFunction('tan(')">tan</button>
-                <button class="btn operator-btn" onclick="appendOperator('√')">√</button>
-                
-                <button class="btn" onclick="appendValue('7')">7</button>
-                <button class="btn" onclick="appendValue('8')">8</button>
-                <button class="btn" onclick="appendValue('9')">9</button>
-                <button class="btn operator-btn" onclick="appendOperator('/')">/</button>
-                
-                <button class="btn" onclick="appendValue('4')">4</button>
-                <button class="btn" onclick="appendValue('5')">5</button>
-                <button class="btn" onclick="appendValue('6')">6</button>
-                <button class="btn operator-btn" onclick="appendOperator('*')">*</button>
-                
-                <button class="btn" onclick="appendValue('1')">1</button>
-                <button class="btn" onclick="appendValue('2')">2</button>
-                <button class="btn" onclick="appendValue('3')">3</button>
-                <button class="btn operator-btn" onclick="appendOperator('-')">-</button>
-                
-                <button class="btn" onclick="appendValue('0')">0</button>
-                <button class="btn" onclick="appendValue('.')">.</button>
-                <button class="btn operator-btn" onclick="appendOperator('+')">+</button>
-                <button class="btn operator-btn" onclick="appendOperator('^')">^</button>
-                
-                <button class="btn paren-btn" onclick="appendValue('(')">(</button>
-                <button class="btn paren-btn" onclick="appendValue(')')">)</button>
-                <button class="btn function-btn" onclick="appendFunction('!')">!</button>
-                <button class="btn operator-btn" onclick="appendOperator('√')">√</button>
-                
-                <button class="btn equals-btn" onclick="calculate()">=</button>
-                <button class="btn clear-btn" onclick="clearDisplay()">C</button>
+        <div class="main-content">
+            <div class="calculator">
+                <h1>Advanced Calculator</h1>
+                <input type="text" id="display" class="display" readonly placeholder="0">
+                <div class="buttons">
+                    <button class="btn function-btn" onclick="appendFunction('sin('")">sin</button>
+                    <button class="btn function-btn" onclick="appendFunction('cos('")">cos</button>
+                    <button class="btn function-btn" onclick="appendFunction('tan('")">tan</button>
+                    <button class="btn operator-btn" onclick="appendValue('\u03C0')">π</button>
+                    
+                    <button class="btn" onclick="appendValue('7')">7</button>
+                    <button class="btn" onclick="appendValue('8')">8</button>
+                    <button class="btn" onclick="appendValue('9')">9</button>
+                    <button class="btn operator-btn" onclick="appendOperator('/')">/</button>
+                    
+                    <button class="btn" onclick="appendValue('4')">4</button>
+                    <button class="btn" onclick="appendValue('5')">5</button>
+                    <button class="btn" onclick="appendValue('6')">6</button>
+                    <button class="btn operator-btn" onclick="appendOperator('*')">*</button>
+                    
+                    <button class="btn" onclick="appendValue('1')">1</button>
+                    <button class="btn" onclick="appendValue('2')">2</button>
+                    <button class="btn" onclick="appendValue('3')">3</button>
+                    <button class="btn operator-btn" onclick="appendOperator('-')">-</button>
+                    
+                    <button class="btn" onclick="appendValue('0')">0</button>
+                    <button class="btn" onclick="appendValue('.')">.</button>
+                    <button class="btn operator-btn" onclick="appendOperator('+')">+</button>
+                    <button class="btn operator-btn" onclick="appendOperator('^')">^</button>
+                    
+                    <button class="btn paren-btn" onclick="appendValue('(')">(</button>
+                    <button class="btn paren-btn" onclick="appendValue(')')">)</button>
+                    <button class="btn function-btn" onclick="appendFunction('!')">!</button>
+                    <button class="btn function-btn" onclick="appendValue('e')">e</button>
+                    
+                    <button class="btn equals-btn" onclick="calculate()">=</button>
+                    <button class="btn clear-btn" onclick="clearDisplay()">C</button>
+                </div>
+            </div>
+            <div class="history-panel">
+                <h2>History</h2>
+                <div id="history" class="history-list"></div>
+                <button class="btn clear-btn" onclick="clearHistory()" style="width: 100%; margin-top: 10px;">Clear History</button>
             </div>
         </div>
     </div>
