@@ -35,16 +35,21 @@ async function execute(commands, vars = {}) {
         const cmd = commands[i];
         const op = cmd[0];
 
+        /* say('a' & b & 'c') */
         if (op === "say_concat") {
             let parts = cmd[1];
             let out = "";
 
             for (let p of parts) {
+                // string literal
                 if (p[0] === "'" && p[p.length - 1] === "'") {
                     out += p.substring(1, p.length - 1);
-                } else if (p in vars) {
+                }
+                // variable
+                else if (p in vars) {
                     out += vars[p];
-                } else {
+                }
+                else {
                     throw "Unknown value: " + p;
                 }
             }
@@ -52,16 +57,25 @@ async function execute(commands, vars = {}) {
             print(out);
         }
 
+        /* var(name) */
         else if (op === "var_decl") {
             vars[cmd[1]] = null;
         }
 
+        /* var(name) = value */
         else if (op === "var_set") {
             const name = cmd[1];
             const value = cmd[2];
-            vars[name] = value;
+
+            // Strip quotes if it's a string literal
+            if (value[0] === "'" && value[value.length - 1] === "'") {
+                vars[name] = value.substring(1, value.length - 1);
+            } else {
+                vars[name] = value;
+            }
         }
 
+        /* ret(name) */
         else if (op === "input") {
             const name = cmd[1];
             const value = await waitForInput();
@@ -97,6 +111,7 @@ function parse(tokens) {
                     j++;
                     continue;
                 }
+
                 parts.push(tokens[j]);
                 j++;
 
