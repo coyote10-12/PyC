@@ -1,6 +1,62 @@
 function tokenize(code) {
     const tokens = code.match(/'[^']*'|[A-Za-z_]\w*|==|!=|<=|>=|[{}();=]|[0-9]+/g);
-    return tokens || []; // <— FIX
+    return tokens || [];
+}
+
+function waitForInput() {
+    return new Promise(resolve => {
+        const input = document.getElementById("consoleInput");
+
+        input.value = "";
+        input.focus();
+
+        function handler(e) {
+            if (e.key === "Enter") {
+                input.removeEventListener("keydown", handler);
+                resolve(input.value);
+            }
+        }
+
+        input.addEventListener("keydown", handler);
+    });
+}
+
+async function execute(commands, vars = {}) {
+    const output = document.getElementById("output");
+
+    function print(text) {
+        output.innerHTML += text + "<br>";
+        output.scrollTop = output.scrollHeight;
+    }
+
+    for (let i = 0; i < commands.length; i++) {
+        const cmd = commands[i];
+        const op = cmd[0];
+
+        if (op === "say") {
+            const value = cmd[1];
+            if (value in vars) print(vars[value]);
+            else print(value);
+        }
+
+        else if (op === "var_decl") {
+            vars[cmd[1]] = null;
+        }
+
+        else if (op === "var_set") {
+            const name = cmd[1];
+            const value = cmd[2];
+            vars[name] = /^\d+$/.test(value) ? Number(value) : value;
+        }
+
+        else if (op === "input") {
+            const name = cmd[1];
+            const value = await waitForInput();
+            vars[name] = value;
+        }
+    }
+
+    return vars;
 }
 
 function parse(tokens) {
@@ -52,51 +108,19 @@ function parse(tokens) {
     return commands;
 }
 
-function execute(commands) {
-    const vars = {};
-    const output = document.getElementById("output");
-
-    function print(text) {
-        output.innerHTML += text + "<br>";
-        output.scrollTop = output.scrollHeight;
-    }
-
-    for (const cmd of commands) {
-        const op = cmd[0];
-
-        if (op === "say") {
-            const value = cmd[1];
-            if (value in vars) print(vars[value]);
-            else print(value);
-        }
-
-        else if (op === "var_decl") {
-            vars[cmd[1]] = null;
-        }
-
-        else if (op === "var_set") {
-            const name = cmd[1];
-            const value = cmd[2];
-            vars[name] = /^\d+$/.test(value) ? Number(value) : value;
-        }
-
-        else if (op === "input") {
-            const name = cmd[1];
-            vars[name] = prompt("> ");
-        }
-    }
-
-    return vars;
-}
-
-function runPyC(code) {
+async function runPyC(code) {
     const tokens = tokenize(code);
     const commands = parse(tokens);
-    return execute(commands);
+    return await execute(commands);
 }
 
 function runPyCFromEditor() {
-    document.getElementById("output").innerHTML = "";
+    const output = document.getElementById("output");
+    output.innerHTML = "";
+
     const code = document.getElementById("codeBox").value;
-    runPyC(code);
+
+    runPyC(code).catch(err => {
+        output.innerHTML += "<span style='color:red'>" + err + "</span>";
+    });
 }
