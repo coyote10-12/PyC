@@ -1,5 +1,6 @@
 function tokenize(code) {
-    return code.match(/'[^']*'|[A-Za-z_]\w*|==|!=|<=|>=|[{}();=]|[0-9]+/g);
+    const tokens = code.match(/'[^']*'|[A-Za-z_]\w*|==|!=|<=|>=|[{}();=]|[0-9]+/g);
+    return tokens || []; // <— FIX
 }
 
 function parse(tokens) {
