@@ -1,5 +1,5 @@
 function tokenize(code) {
-    const tokens = code.match(/'[^']*'|[A-Za-z_]\w*|==|!=|<=|>=|&|[{}();=]|[0-9]+/g);
+    const tokens = code.match(/'[^']*'|[A-Za-z_]\w*|==|!=|<=|>=|&|[(){};=]|[0-9]+/g);
     return tokens || [];
 }
 
@@ -35,26 +35,16 @@ async function execute(commands, vars = {}) {
         const cmd = commands[i];
         const op = cmd[0];
 
-        if (op === "say") {
-            const value = cmd[1];
-            if (value in vars) print(vars[value]);
-            else print(value);
-        }
-
-        else if (op === "say_concat") {
+        if (op === "say_concat") {
             let parts = cmd[1];
             let out = "";
 
             for (let p of parts) {
-                // string literal
                 if (p[0] === "'" && p[p.length - 1] === "'") {
                     out += p.substring(1, p.length - 1);
-                }
-                // variable
-                else if (p in vars) {
+                } else if (p in vars) {
                     out += vars[p];
-                }
-                else {
+                } else {
                     throw "Unknown value: " + p;
                 }
             }
@@ -118,17 +108,23 @@ function parse(tokens) {
             i = j + 1;
         }
 
-        /* var name or var name = value */
+        /* var(name) or var(name) = value */
         else if (tok === "var") {
-            const name = tokens[i+1];
+            if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
+            const name = tokens[i+2];
+            if (tokens[i+3] !== ")") throw "SyntaxError: expected )";
 
-            if (tokens[i+2] === "=") {
-                const value = tokens[i+3];
+            // var(name) = value
+            if (tokens[i+4] === "=") {
+                const value = tokens[i+5];
                 commands.push(["var_set", name, value]);
-                i += 4;
-            } else {
+                i += 6;
+            }
+
+            // var(name)
+            else {
                 commands.push(["var_decl", name]);
-                i += 2;
+                i += 4;
             }
         }
 
