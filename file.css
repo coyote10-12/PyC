@@ -55,3 +55,25 @@ button {
     color: #0f0;
     border: 1px solid #333;
 }
+
+/* Input bar */
+#inputArea {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+}
+
+#inputArea span {
+    color: #0f0;
+    margin-right: 5px;
+    font-family: monospace;
+}
+
+#consoleInput {
+    flex: 1;
+    background: #111;
+    color: #0f0;
+    border: 1px solid #333;
+    padding: 5px;
+    font-family: monospace;
+}
