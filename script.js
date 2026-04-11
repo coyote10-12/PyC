@@ -53,14 +53,20 @@ function parse(tokens) {
 
 function execute(commands) {
     const vars = {};
+    const output = document.getElementById("output");
+
+    function print(text) {
+        output.innerHTML += text + "<br>";
+        output.scrollTop = output.scrollHeight;
+    }
 
     for (const cmd of commands) {
         const op = cmd[0];
 
         if (op === "say") {
             const value = cmd[1];
-            if (value in vars) console.log(vars[value]);
-            else console.log(value);
+            if (value in vars) print(vars[value]);
+            else print(value);
         }
 
         else if (op === "var_decl") {
@@ -86,4 +92,10 @@ function runPyC(code) {
     const tokens = tokenize(code);
     const commands = parse(tokens);
     return execute(commands);
+}
+
+function runPyCFromEditor() {
+    document.getElementById("output").innerHTML = "";
+    const code = document.getElementById("codeBox").value;
+    runPyC(code);
 }
