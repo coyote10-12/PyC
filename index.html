@@ -2,13 +2,24 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>PyC Language</title>
+    <title>PyC IDE</title>
     <link rel="stylesheet" href="file.css">
 </head>
 <body>
-    <h1>PyC Interpreter Loaded</h1>
-    <p>Open DevTools and run <code>runPyC(...)</code></p>
 
-    <script src="script.js"></script>
+<div id="container">
+    <div id="editor">
+        <h2>PyC Code</h2>
+        <textarea id="codeBox">say('Hello from PyC')</textarea>
+        <button onclick="runPyCFromEditor()">Run</button>
+    </div>
+
+    <div id="console">
+        <h2>PyC Console</h2>
+        <div id="output"></div>
+    </div>
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
