@@ -46,11 +46,15 @@ async function execute(commands, vars = {}) {
             let out = "";
 
             for (let p of parts) {
-                if (p.startsWith("'") && p.endsWith("'")) {
-                    out += p.slice(1, -1);
-                } else if (p in vars) {
+                // string literal
+                if (p[0] === "'" && p[p.length - 1] === "'") {
+                    out += p.substring(1, p.length - 1);
+                }
+                // variable
+                else if (p in vars) {
                     out += vars[p];
-                } else {
+                }
+                else {
                     throw "Unknown value: " + p;
                 }
             }
@@ -65,7 +69,7 @@ async function execute(commands, vars = {}) {
         else if (op === "var_set") {
             const name = cmd[1];
             const value = cmd[2];
-            vars[name] = /^\d+$/.test(value) ? Number(value) : value;
+            vars[name] = value;
         }
 
         else if (op === "input") {
@@ -105,6 +109,9 @@ function parse(tokens) {
                 }
                 parts.push(tokens[j]);
                 j++;
+
+                if (j >= tokens.length)
+                    throw "SyntaxError: missing )";
             }
 
             commands.push(["say_concat", parts]);
