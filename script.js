@@ -191,28 +191,35 @@ function parse(tokens) {
             continue;
         }
 
-        /* ---------------- SAY ---------------- */
+       /* ---------------- SAY ---------------- */
         if (tok === "say") {
             if (tokens[i+1] !== "(") throw "SyntaxError: expected ( after say";
-
+        
             let j = i + 2;
             let parts = [];
-
+            let current = "";
+        
             while (tokens[j] !== ")") {
                 if (tokens[j] === "&") {
+                    if (current.trim() !== "") {
+                        parts.push(current.trim());
+                        current = "";
+                    }
                     j++;
                     continue;
                 }
-                parts.push(tokens[j]);
+                current += tokens[j];
                 j++;
                 if (j >= tokens.length) throw "SyntaxError: missing ) in say(...)";
             }
-
+        
+            if (current.trim() !== "") parts.push(current.trim());
+        
             commands.push(["say_concat", parts]);
             i = j + 1;
             continue;
         }
-
+        
         /* ---------------- VAR ---------------- */
         if (tok === "var") {
             if (tokens[i+1] !== "(") throw "SyntaxError: expected ( after var";
