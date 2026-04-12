@@ -1,156 +1,111 @@
 /* ============================================================
-        TOKENIZER
+        TOKENIZER (updated for def + calls)
 ============================================================ */
 
 function tokenize(code) {
-    return code.match(/'[^']*'|==|!=|<=|>=|[A-Za-z_]\w*|\d+|[(){};=+\-*/<>]/g) || [];
+    // Supports:
+    // def name(a, b) { }
+    // name(5, 5)
+    // flexible spacing
+    return code.match(/'[^']*'|==|!=|<=|>=|def|[A-Za-z_]\w*|\d+|[(){};,=+\-*/<>]/g) || [];
 }
 
 /* ============================================================
-        CONSOLE INPUT
-============================================================ */
-
-function waitForInput() {
-    return new Promise(resolve => {
-        const input = document.getElementById("consoleInput");
-        input.value = "";
-        input.focus();
-
-        function handler(e) {
-            if (e.key === "Enter") {
-                input.removeEventListener("keydown", handler);
-                resolve(input.value);
-            }
-        }
-
-        input.addEventListener("keydown", handler);
-    });
-}
-
-/* ============================================================
-        MATH PARSER (PEMDAS)
-============================================================ */
-
-function parseMath(tokens) {
-    let i = 0;
-
-    function peek() { return tokens[i]; }
-    function consume(t) {
-        if (t && tokens[i] !== t) throw "SyntaxError: expected " + t;
-        return tokens[i++];
-    }
-
-    function primary() {
-        let t = peek();
-
-        if (t === "(") {
-            consume("(");
-            let expr = expression();
-            consume(")");
-            return expr;
-        }
-
-        if (t === "-") {
-            consume("-");
-            return -primary();
-        }
-
-        if (/^\d+$/.test(t)) {
-            consume();
-            return Number(t);
-        }
-
-        if (/^[A-Za-z_]\w*$/.test(t)) {
-            consume();
-            return { var: t };
-        }
-
-        throw "SyntaxError: invalid math token " + t;
-    }
-
-    function exponent() {
-        let left = primary();
-        while (peek() === "^") {
-            consume("^");
-            let right = exponent();
-            left = { op: "^", left, right };
-        }
-        return left;
-    }
-
-    function term() {
-        let left = exponent();
-        while (peek() === "*" || peek() === "/") {
-            let op = consume();
-            let right = exponent();
-            left = { op, left, right };
-        }
-        return left;
-    }
-
-    function expression() {
-        let left = term();
-        while (peek() === "+" || peek() === "-") {
-            let op = consume();
-            let right = term();
-            left = { op, left, right };
-        }
-        return left;
-    }
-
-    let result = expression();
-    if (i !== tokens.length) throw "SyntaxError: extra tokens in math";
-    return result;
-}
-
-function evalMath(node, vars) {
-    if (typeof node === "number") return node;
-
-    if (node.var) {
-        if (!(node.var in vars)) throw "ReferenceError: " + node.var + " not defined";
-        let v = vars[node.var];
-        if (typeof v !== "number") throw "TypeError: variable " + node.var + " is not numeric";
-        return v;
-    }
-
-    let a = evalMath(node.left, vars);
-    let b = evalMath(node.right, vars);
-
-    switch (node.op) {
-        case "+": return a + b;
-        case "-": return a - b;
-        case "*": return a * b;
-        case "/": return a / b;
-        case "^": return Math.pow(a, b);
-    }
-
-    throw "SyntaxError: invalid math operation";
-}
-
-/* ============================================================
-        CONDITION EVALUATOR
-============================================================ */
-
-function evalCondition(expr, vars) {
-    const replaced = expr.replace(/\b[A-Za-z_]\w*\b/g, name => {
-        if (name in vars) return JSON.stringify(vars[name]);
-        return name;
-    });
-
-    return Function(`return (${replaced});`)();
-}
-
-/* ============================================================
-        PARSER
+        PARSER (updated for functions)
 ============================================================ */
 
 function parse(tokens) {
     const commands = [];
     let i = 0;
 
+    // Function table: name -> { params:[], body:[] }
+    const functions = {};
+
+    function parseFunction() {
+        // def name ( a , b , c ) { body }
+        i++; // skip 'def'
+
+        const name = tokens[i];
+        if (!/^[A-Za-z_]\w*$/.test(name)) throw "SyntaxError: invalid function name";
+        i++;
+
+        if (tokens[i] !== "(") throw "SyntaxError: expected ( after function name";
+        i++;
+
+        let params = [];
+        while (tokens[i] !== ")") {
+            if (!/^[A-Za-z_]\w*$/.test(tokens[i])) throw "SyntaxError: invalid parameter name";
+            params.push(tokens[i]);
+            i++;
+
+            if (tokens[i] === ",") {
+                i++;
+                continue;
+            }
+
+            if (tokens[i] !== ")" && tokens[i] !== ",")
+                throw "SyntaxError: expected , or ) in parameter list";
+        }
+        i++; // skip ')'
+
+        if (tokens[i] !== "{") throw "SyntaxError: expected { after def(...)";
+        i++;
+
+        let body = [];
+        let depth = 1;
+
+        while (i < tokens.length && depth > 0) {
+            if (tokens[i] === "{") depth++;
+            if (tokens[i] === "}") depth--;
+
+            if (depth > 0) body.push(tokens[i]);
+            i++;
+        }
+
+        functions[name] = { params, body };
+    }
+
+    function parseFunctionCall(name) {
+        // name ( args )
+        i++; // skip name
+        i++; // skip '('
+
+        let args = [];
+        let current = "";
+
+        while (tokens[i] !== ")") {
+            if (tokens[i] === ",") {
+                args.push(current.trim());
+                current = "";
+                i++;
+                continue;
+            }
+            current += tokens[i];
+            i++;
+        }
+
+        if (current.trim() !== "") args.push(current.trim());
+        i++; // skip ')'
+
+        commands.push(["call", name, args]);
+    }
+
     while (i < tokens.length) {
         const tok = tokens[i];
 
+        /* ---------------- FUNCTION DEFINITION ---------------- */
+        if (tok === "def") {
+            parseFunction();
+            continue;
+        }
+
+        /* ---------------- FUNCTION CALL ---------------- */
+        if (/^[A-Za-z_]\w*$/.test(tok) && tokens[i+1] === "(") {
+            parseFunctionCall(tok);
+            continue;
+        }
+
+        /* ---------------- EXISTING PARSER LOGIC ---------------- */
         if (tok === ";") {
             i++;
             continue;
@@ -203,25 +158,22 @@ function parse(tokens) {
         if (tok === "for" && tokens[i+1] === "(") {
             let j = i + 2;
 
-            /* ---- initializer ---- */
             let init = "";
             while (tokens[j] !== ";") {
                 if (j >= tokens.length) throw "SyntaxError: missing ; in for initializer";
                 init += tokens[j];
                 j++;
             }
-            j++; // skip ;
+            j++;
 
-            /* ---- condition ---- */
             let cond = "";
             while (tokens[j] !== ";") {
                 if (j >= tokens.length) throw "SyntaxError: missing ; in for condition";
                 cond += tokens[j];
                 j++;
             }
-            j++; // skip ;
+            j++;
 
-            /* ---- increment ---- */
             let inc = "";
             while (tokens[j] !== ")") {
                 if (j >= tokens.length) throw "SyntaxError: missing ) in for increment";
@@ -295,67 +247,15 @@ function parse(tokens) {
         throw "Unknown token: " + tok;
     }
 
+    commands.push(["functions", functions]);
     return commands;
 }
 
 /* ============================================================
-        FOR HELPERS
+        FUNCTION EXECUTION ENGINE
 ============================================================ */
 
-function runForInit(text, vars) {
-    // Allowed:
-    // var(i)=0
-    // i=0
-
-    if (text.startsWith("var(")) {
-        let name = text.slice(4, text.indexOf(")"));
-        let value = text.split("=")[1];
-
-        if (!/^\d+$/.test(value)) throw "For initializer must assign a number";
-        vars[name] = Number(value);
-        return;
-    }
-
-    // i=0
-    if (text.includes("=")) {
-        let [name, value] = text.split("=");
-
-        if (!(name in vars)) throw "Variable " + name + " not declared";
-        if (!/^\d+$/.test(value)) throw "For initializer must assign a number";
-
-        vars[name] = Number(value);
-        return;
-    }
-
-    throw "Invalid for initializer: " + text;
-}
-
-function runForInc(text, vars) {
-    // Only +i or -i allowed
-    if (text.startsWith("+")) {
-        let name = text.slice(1);
-        if (!(name in vars)) throw "Variable " + name + " not declared";
-        if (typeof vars[name] !== "number") throw "Increment requires numeric variable";
-        vars[name]++;
-        return;
-    }
-
-    if (text.startsWith("-")) {
-        let name = text.slice(1);
-        if (!(name in vars)) throw "Variable " + name + " not declared";
-        if (typeof vars[name] !== "number") throw "Decrement requires numeric variable";
-        vars[name]--;
-        return;
-    }
-
-    throw "Invalid for increment: " + text;
-}
-
-/* ============================================================
-        EXECUTION ENGINE
-============================================================ */
-
-async function execute(commands, vars = {}) {
+async function execute(commands, globalVars = {}) {
     const output = document.getElementById("output");
 
     function print(text) {
@@ -363,17 +263,151 @@ async function execute(commands, vars = {}) {
         output.scrollTop = output.scrollHeight;
     }
 
-    let blockStack = [];
-
+    // Extract function table
+    let funcTable = {};
     for (let cmd of commands) {
+        if (cmd[0] === "functions") {
+            funcTable = cmd[1];
+        }
+    }
+
+    // Call stack: each frame = { vars, commands, ip }
+    let callStack = [];
+
+    // Push main program frame
+    callStack.push({
+        vars: globalVars,
+        commands: commands,
+        ip: 0
+    });
+
+    /* ========================================================
+            HELPERS
+    ======================================================== */
+
+    function evalValue(token, vars) {
+        // String literal
+        if (token[0] === "'" && token[token.length - 1] === "'") {
+            return token.substring(1, token.length - 1);
+        }
+
+        // Math expression
+        if (/[\d()+\-*/^]/.test(token)) {
+            let mtokens = tokenize(token);
+            let tree = parseMath(mtokens);
+            return evalMath(tree, vars);
+        }
+
+        // Variable
+        if (token in vars) return vars[token];
+
+        throw "Unknown value: " + token;
+    }
+
+    function runForInit(text, vars) {
+        // var(i)=0
+        if (text.startsWith("var(")) {
+            let name = text.slice(4, text.indexOf(")"));
+            let value = text.split("=")[1];
+
+            if (!/^\d+$/.test(value)) throw "For initializer must assign a number";
+            vars[name] = Number(value);
+            return;
+        }
+
+        // i=0
+        if (text.includes("=")) {
+            let [name, value] = text.split("=");
+
+            if (!(name in vars)) throw "Variable " + name + " not declared";
+            if (!/^\d+$/.test(value)) throw "For initializer must assign a number";
+
+            vars[name] = Number(value);
+            return;
+        }
+
+        throw "Invalid for initializer: " + text;
+    }
+
+    function runForInc(text, vars) {
+        if (text.startsWith("+")) {
+            let name = text.slice(1);
+            if (!(name in vars)) throw "Variable " + name + " not declared";
+            if (typeof vars[name] !== "number") throw "Increment requires numeric variable";
+            vars[name]++;
+            return;
+        }
+
+        if (text.startsWith("-")) {
+            let name = text.slice(1);
+            if (!(name in vars)) throw "Variable " + name + " not declared";
+            if (typeof vars[name] !== "number") throw "Decrement requires numeric variable";
+            vars[name]--;
+            return;
+        }
+
+        throw "Invalid for increment: " + text;
+    }
+
+    /* ========================================================
+            MAIN EXECUTION LOOP
+    ======================================================== */
+
+    while (callStack.length > 0) {
+        let frame = callStack[callStack.length - 1];
+        let { vars, commands, ip } = frame;
+
+        if (ip >= commands.length) {
+            callStack.pop();
+            continue;
+        }
+
+        let cmd = commands[ip];
+        frame.ip++;
+
         const op = cmd[0];
+
+        /* ---------------- FUNCTION CALL ---------------- */
+        if (op === "call") {
+            const name = cmd[1];
+            const args = cmd[2];
+
+            if (!(name in funcTable)) throw "CallError: function " + name + " not defined";
+
+            let def = funcTable[name];
+            let params = def.params;
+
+            if (args.length > params.length)
+                throw "CallError: too many arguments for " + name;
+
+            // Build local scope
+            let local = {};
+
+            for (let i = 0; i < params.length; i++) {
+                if (i < args.length) {
+                    local[params[i]] = evalValue(args[i], vars);
+                } else {
+                    local[params[i]] = 1; // missing args default to 1
+                }
+            }
+
+            // Push new frame
+            callStack.push({
+                vars: local,
+                commands: parse(tokenize(def.body.join(" "))),
+                ip: 0
+            });
+
+            continue;
+        }
 
         /* ---------------- IF ---------------- */
         if (op === "if_start") {
             const cond = cmd[1];
             const result = evalCondition(cond, vars);
 
-            blockStack.push({
+            if (!frame.blockStack) frame.blockStack = [];
+            frame.blockStack.push({
                 type: "if",
                 active: result,
                 branchTaken: result
@@ -383,7 +417,7 @@ async function execute(commands, vars = {}) {
 
         /* ---------------- OR ---------------- */
         if (op === "or_start") {
-            const block = blockStack[blockStack.length - 1];
+            let block = frame.blockStack[frame.blockStack.length - 1];
             const cond = cmd[1];
             const result = evalCondition(cond, vars);
 
@@ -395,7 +429,7 @@ async function execute(commands, vars = {}) {
 
         /* ---------------- ELSE ---------------- */
         if (op === "else_start") {
-            const block = blockStack[blockStack.length - 1];
+            let block = frame.blockStack[frame.blockStack.length - 1];
 
             block.active = !block.branchTaken;
             block.branchTaken = true;
@@ -411,7 +445,8 @@ async function execute(commands, vars = {}) {
 
             runForInit(init, vars);
 
-            blockStack.push({
+            if (!frame.blockStack) frame.blockStack = [];
+            frame.blockStack.push({
                 type: "for",
                 cond,
                 inc,
@@ -422,20 +457,20 @@ async function execute(commands, vars = {}) {
 
         /* ---------------- END BLOCK ---------------- */
         if (op === "end_block") {
-            const block = blockStack.pop();
+            let block = frame.blockStack.pop();
 
             if (block.type === "for") {
                 runForInc(block.inc, vars);
 
                 if (evalCondition(block.cond, vars)) {
-                    blockStack.push(block);
+                    frame.blockStack.push(block);
                 }
             }
             continue;
         }
 
         /* Skip inactive blocks */
-        if (blockStack.some(b => !b.active)) continue;
+        if (frame.blockStack && frame.blockStack.some(b => !b.active)) continue;
 
         /* ---------------- SAY ---------------- */
         if (op === "say_concat") {
@@ -443,29 +478,7 @@ async function execute(commands, vars = {}) {
             let out = "";
 
             for (let p of parts) {
-                if (p.startsWith("str(") && p.endsendsWith(")")) {
-                    out += p.slice(4, -1);
-                    continue;
-                }
-
-                if (p[0] === "'" && p[p.length - 1] === "'") {
-                    out += p.substring(1, p.length - 1);
-                    continue;
-                }
-
-                if (/[\d()+\-*/^]/.test(p)) {
-                    let mtokens = tokenize(p);
-                    let tree = parseMath(mtokens);
-                    out += evalMath(tree, vars);
-                    continue;
-                }
-
-                if (p in vars) {
-                    out += vars[p];
-                    continue;
-                }
-
-                throw "Unknown value: " + p;
+                out += evalValue(p, vars);
             }
 
             print(out);
@@ -483,24 +496,8 @@ async function execute(commands, vars = {}) {
             const name = cmd[1];
             const value = cmd[2];
 
-            if (value[0] === "'" && value[value.length - 1] === "'") {
-                vars[name] = value.substring(1, value.length - 1);
-                continue;
-            }
-
-            if (/[\d()+\-*/^]/.test(value)) {
-                let mtokens = tokenize(value);
-                let tree = parseMath(mtokens);
-                vars[name] = evalMath(tree, vars);
-                continue;
-            }
-
-            if (value in vars) {
-                vars[name] = vars[value];
-                continue;
-            }
-
-            throw "SyntaxError: invalid assignment value " + value;
+            vars[name] = evalValue(value, vars);
+            continue;
         }
 
         /* ---------------- INPUT ---------------- */
@@ -511,32 +508,11 @@ async function execute(commands, vars = {}) {
         }
     }
 
-    return vars;
+    return globalVars;
 }
 
 /* ============================================================
-        RUNNER
-============================================================ */
-
-async function runPyC(code) {
-    const tokens = tokenize(code);
-    const commands = parse(tokens);
-    return await execute(commands);
-}
-
-document.getElementById("runBtn").addEventListener("click", () => {
-    const output = document.getElementById("output");
-    output.innerHTML = "";
-
-    const code = document.getElementById("codeBox").value;
-
-    runPyC(code).catch(err => {
-        output.innerHTML += `<span style="color:red">${err}</span>`;
-    });
-});
-
-/* ============================================================
-        AUTO-BRACE (CodeHS-style)
+        AUTO-BRACE (updated for def { } blocks)
 ============================================================ */
 
 document.getElementById("codeBox").addEventListener("keydown", function(e) {
@@ -550,7 +526,7 @@ document.getElementById("codeBox").addEventListener("keydown", function(e) {
         // {
         //     <cursor>
         // }
-        if (before.endsWith("{")) {
+        if (before.trimEnd().endsWith("{")) {
             e.preventDefault();
 
             const insert = "\n\t\n}";
