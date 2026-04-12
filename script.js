@@ -1,394 +1,43 @@
-/* ------------------ TOKENIZER ------------------ */
+// IF block
+if (cmd[0] === "if_start") {
+    const cond = cmd[1];
+    const result = evalCondition(cond, vars);
 
-function tokenize(code) {
-    return code.match(/'[^']*'|==|!=|<=|>=|[A-Za-z_]\w*|\d+|[(){};=+\-*/<>]/g) || [];
-}
-
-/* ------------------ WAIT FOR INPUT ------------------ */
-
-function waitForInput() {
-    return new Promise(resolve => {
-        const input = document.getElementById("consoleInput");
-        input.value = "";
-        input.focus();
-
-        function handler(e) {
-            if (e.key === "Enter") {
-                input.removeEventListener("keydown", handler);
-                resolve(input.value);
-            }
-        }
-
-        input.addEventListener("keydown", handler);
+    blockStack.push({
+        type: "if",
+        active: result,
+        branchTaken: result
     });
+    continue;
 }
 
-/* ------------------ MATH PARSER ------------------ */
+// OR block
+if (cmd[0] === "or_start") {
+    const block = blockStack[blockStack.length - 1];
+    const cond = cmd[1];
+    const result = evalCondition(cond, vars);
 
-function parseMath(tokens) {
-    let i = 0;
+    block.active = !block.branchTaken && result;
+    if (result) block.branchTaken = true;
 
-    function peek() { return tokens[i]; }
-    function consume(t) {
-        if (t && tokens[i] !== t) throw "SyntaxError: expected " + t;
-        return tokens[i++];
-    }
-
-    function primary() {
-        let t = peek();
-
-        if (t === "(") {
-            consume("(");
-            let expr = expression();
-            consume(")");
-            return expr;
-        }
-
-        if (t === "-") {
-            consume("-");
-            return -primary();
-        }
-
-        if (/^\d+$/.test(t)) {
-            consume();
-            return Number(t);
-        }
-
-        if (/^[A-Za-z_]\w*$/.test(t)) {
-            consume();
-            return { var: t };
-        }
-
-        throw "SyntaxError: invalid math token " + t;
-    }
-
-    function exponent() {
-        let left = primary();
-        while (peek() === "^") {
-            consume("^");
-            let right = exponent();
-            left = { op: "^", left, right };
-        }
-        return left;
-    }
-
-    function term() {
-        let left = exponent();
-        while (peek() === "*" || peek() === "/") {
-            let op = consume();
-            let right = exponent();
-            left = { op, left, right };
-        }
-        return left;
-    }
-
-    function expression() {
-        let left = term();
-        while (peek() === "+" || peek() === "-") {
-            let op = consume();
-            let right = term();
-            left = { op, left, right };
-        }
-        return left;
-    }
-
-    let result = expression();
-    if (i !== tokens.length) throw "SyntaxError: extra tokens in math";
-    return result;
+    continue;
 }
 
-function evalMath(node, vars) {
-    if (typeof node === "number") return node;
+// ELSE block
+if (cmd[0] === "else_start") {
+    const block = blockStack[blockStack.length - 1];
 
-    if (node.var) {
-        if (!(node.var in vars)) throw "ReferenceError: " + node.var + " not defined";
-        let v = vars[node.var];
-        if (typeof v !== "number") throw "TypeError: variable " + node.var + " is not numeric";
-        return v;
-    }
+    block.active = !block.branchTaken;
+    block.branchTaken = true;
 
-    let a = evalMath(node.left, vars);
-    let b = evalMath(node.right, vars);
-
-    switch (node.op) {
-        case "+": return a + b;
-        case "-": return a - b;
-        case "*": return a * b;
-        case "/": return a / b;
-        case "^": return Math.pow(a, b);
-    }
-
-    throw "SyntaxError: invalid math operation";
+    continue;
 }
 
-/* ------------------ CONDITION EVALUATOR ------------------ */
-
-function evalCondition(expr, vars) {
-    const replaced = expr.replace(/\b[A-Za-z_]\w*\b/g, name => {
-        if (name in vars) return JSON.stringify(vars[name]);
-        return name;
-    });
-
-    return Function(`return (${replaced});`)();
+// END block
+if (cmd[0] === "end_block") {
+    blockStack.pop();
+    continue;
 }
 
-/* ------------------ EXECUTION ENGINE ------------------ */
-
-async function execute(commands, vars = {}) {
-    const output = document.getElementById("output");
-
-    function print(text) {
-        output.innerHTML += text + "<br>";
-        output.scrollTop = output.scrollHeight;
-    }
-
-    let blockStack = [];
-
-    for (let cmd of commands) {
-        const op = cmd[0];
-
-        /* ---- BLOCK CONTROL ---- */
-
-        if (op === "if_start") {
-            const cond = cmd[1];
-            const result = evalCondition(cond, vars);
-
-            blockStack.push({
-                type: "if",
-                active: result,
-                branchTaken: result
-            });
-            continue;
-        }
-
-        if (op === "or_start") {
-            const block = blockStack[blockStack.length - 1];
-            const cond = cmd[1];
-            const result = evalCondition(cond, vars);
-
-            block.active = !block.branchTaken && result;
-            if (result) block.branchTaken = true;
-
-            continue;
-        }
-
-        if (op === "else_start") {
-            const block = blockStack[blockStack.length - 1];
-
-            block.active = !block.branchTaken;
-            block.branchTaken = true;
-
-            continue;
-        }
-
-        if (op === "end_block") {
-            blockStack.pop();
-            continue;
-        }
-
-        if (blockStack.some(b => !b.active)) continue;
-
-        /* ---- NORMAL COMMANDS ---- */
-
-        if (op === "say_concat") {
-            let parts = cmd[1];
-            let out = "";
-
-            for (let p of parts) {
-                if (p.startsWith("str(") && p.endsWith(")")) {
-                    out += p.slice(4, -1);
-                    continue;
-                }
-
-                if (p[0] === "'" && p[p.length - 1] === "'") {
-                    out += p.substring(1, p.length - 1);
-                    continue;
-                }
-
-                if (/[\d()+\-*/^]/.test(p)) {
-                    let mtokens = tokenize(p);
-                    let tree = parseMath(mtokens);
-                    out += evalMath(tree, vars);
-                    continue;
-                }
-
-                if (p in vars) {
-                    out += vars[p];
-                    continue;
-                }
-
-                throw "Unknown value: " + p;
-            }
-
-            print(out);
-            continue;
-        }
-
-        if (op === "var_decl") {
-            vars[cmd[1]] = null;
-            continue;
-        }
-
-        if (op === "var_set") {
-            const name = cmd[1];
-            const value = cmd[2];
-
-            if (value[0] === "'" && value[value.length - 1] === "'") {
-                vars[name] = value.substring(1, value.length - 1);
-                continue;
-            }
-
-            if (/[\d()+\-*/^]/.test(value)) {
-                let mtokens = tokenize(value);
-                let tree = parseMath(mtokens);
-                vars[name] = evalMath(tree, vars);
-                continue;
-            }
-
-            if (value in vars) {
-                vars[name] = vars[value];
-                continue;
-            }
-
-            throw "SyntaxError: invalid assignment value " + value;
-        }
-
-        if (op === "input") {
-            const name = cmd[1];
-            vars[name] = await waitForInput();
-            continue;
-        }
-    }
-
-    return vars;
-}
-
-/* ------------------ PARSER ------------------ */
-
-function parse(tokens) {
-    const commands = [];
-    let i = 0;
-
-    while (i < tokens.length) {
-        const tok = tokens[i];
-
-        if (tok === ";") { i++; continue; }
-
-        /* ---- IF ---- */
-        if (tok === "if" && tokens[i+1] === "(") {
-            let j = i + 2;
-            let cond = "";
-
-            while (tokens[j] !== ")") {
-                cond += tokens[j];
-                j++;
-            }
-
-            if (tokens[j+1] !== "{") throw "SyntaxError: expected {";
-
-            commands.push(["if_start", cond]);
-            i = j + 2;
-            continue;
-        }
-
-        /* ---- OR ---- */
-        if (tok === "}" && tokens[i+1] === "or" && tokens[i+2] === "(") {
-            let j = i + 3;
-            let cond = "";
-
-            while (tokens[j] !== ")") {
-                cond += tokens[j];
-                j++;
-            }
-
-            if (tokens[j+1] !== "{") throw "SyntaxError: expected {";
-
-            commands.push(["or_start", cond]);
-            i = j + 2;
-            continue;
-        }
-
-        /* ---- ELSE ---- */
-        if (tok === "}" && tokens[i+1] === "else" && tokens[i+2] === "{") {
-            commands.push(["else_start"]);
-            i += 3;
-            continue;
-        }
-
-        /* ---- END BLOCK ---- */
-        if (tok === "}") {
-            commands.push(["end_block"]);
-            i++;
-            continue;
-        }
-
-        /* ---- SAY ---- */
-        if (tok === "say") {
-            if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
-
-            let j = i + 2;
-            let parts = [];
-
-            while (tokens[j] !== ")") {
-                if (tokens[j] === "&") { j++; continue; }
-                parts.push(tokens[j]);
-                j++;
-                if (j >= tokens.length) throw "SyntaxError: missing )";
-            }
-
-            commands.push(["say_concat", parts]);
-            i = j + 1;
-            continue;
-        }
-
-        /* ---- VAR ---- */
-        if (tok === "var") {
-            if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
-            const name = tokens[i+2];
-            if (tokens[i+3] !== ")") throw "SyntaxError: expected )";
-
-            if (tokens[i+4] === "=") {
-                const value = tokens[i+5];
-                commands.push(["var_set", name, value]);
-                i += 6;
-            } else {
-                commands.push(["var_decl", name]);
-                i += 4;
-            }
-            continue;
-        }
-
-        /* ---- INPUT ---- */
-        if (tok === "ret") {
-            if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
-            const name = tokens[i+2];
-            if (tokens[i+3] !== ")") throw "SyntaxError: expected )";
-            commands.push(["input", name]);
-            i += 4;
-            continue;
-        }
-
-        throw "Unknown token: " + tok;
-    }
-
-    return commands;
-}
-
-/* ------------------ RUNNER ------------------ */
-
-async function runPyC(code) {
-    const tokens = tokenize(code);
-    const commands = parse(tokens);
-    return await execute(commands);
-}
-
-document.getElementById("runBtn").addEventListener("click", () => {
-    const output = document.getElementById("output");
-    output.innerHTML = "";
-
-    const code = document.getElementById("codeBox").value;
-
-    runPyC(code).catch(err => {
-        output.innerHTML += `<span style="color:red">${err}</span>`;
-    });
-});
+// Skip inactive blocks
+if (blockStack.some(b => !b.active)) continue;
