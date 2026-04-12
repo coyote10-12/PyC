@@ -7,6 +7,146 @@ function tokenize(code) {
 }
 
 /* ============================================================
+        MATH PARSER (unchanged from your original engine)
+============================================================ */
+
+// parseMath: builds an AST from tokens
+function parseMath(tokens) {
+    let i = 0;
+
+    function parseExpression() {
+        let node = parseTerm();
+        while (tokens[i] === "+" || tokens[i] === "-") {
+            let op = tokens[i++];
+            let right = parseTerm();
+            node = { op, left: node, right };
+        }
+        return node;
+    }
+
+    function parseTerm() {
+        let node = parseFactor();
+        while (tokens[i] === "*" || tokens[i] === "/") {
+            let op = tokens[i++];
+            let right = parseFactor();
+            node = { op, left: node, right };
+        }
+        return node;
+    }
+
+    function parseFactor() {
+        let node = parsePower();
+        return node;
+    }
+
+    function parsePower() {
+        let node = parsePrimary();
+        if (tokens[i] === "^") {
+            i++;
+            let right = parsePower(); // right-associative
+            node = { op: "^", left: node, right };
+        }
+        return node;
+    }
+
+    function parsePrimary() {
+        let t = tokens[i];
+
+        // number
+        if (/^\d+$/.test(t)) {
+            i++;
+            return { type: "num", value: Number(t) };
+        }
+
+        // variable
+        if (/^[A-Za-z_]\w*$/.test(t)) {
+            i++;
+            return { type: "var", name: t };
+        }
+
+        // ( expression )
+        if (t === "(") {
+            i++;
+            let node = parseExpression();
+            if (tokens[i] !== ")") throw "SyntaxError: missing )";
+            i++;
+            return node;
+        }
+
+        throw "SyntaxError: invalid math token " + t;
+    }
+
+    return parseExpression();
+}
+
+/* ============================================================
+        MATH EVALUATOR
+============================================================ */
+
+function evalMath(node, vars) {
+    if (node.type === "num") return node.value;
+    if (node.type === "var") {
+        if (!(node.name in vars)) throw "MathError: variable " + node.name + " not defined";
+        if (typeof vars[node.name] !== "number") throw "MathError: " + node.name + " is not numeric";
+        return vars[node.name];
+    }
+
+    let L = evalMath(node.left, vars);
+    let R = evalMath(node.right, vars);
+
+    switch (node.op) {
+        case "+": return L + R;
+        case "-": return L - R;
+        case "*": return L * R;
+        case "/": return L / R;
+        case "^": return L ** R;
+    }
+
+    throw "MathError: unknown operator " + node.op;
+}
+
+/* ============================================================
+        CONDITION EVALUATOR
+============================================================ */
+
+function evalCondition(text, vars) {
+    // tokenize condition
+    let tokens = tokenize(text);
+
+    // simple comparisons only
+    let left = "";
+    let op = "";
+    let right = "";
+
+    let i = 0;
+    while (i < tokens.length && !["==","!=",">","<",">=","<="].includes(tokens[i])) {
+        left += tokens[i];
+        i++;
+    }
+
+    op = tokens[i++];
+    while (i < tokens.length) {
+        right += tokens[i];
+        i++;
+    }
+
+    let L = evalValue(left.trim(), vars);
+    let R = evalValue(right.trim(), vars);
+
+    switch (op) {
+        case "==": return L == R;
+        case "!=": return L != R;
+        case ">":  return L > R;
+        case "<":  return L < R;
+        case ">=": return L >= R;
+        case "<=": return L <= R;
+    }
+
+    throw "ConditionError: invalid operator " + op;
+}
+
+
+/* ============================================================
         PARSER (updated for functions)
 ============================================================ */
 
