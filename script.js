@@ -1,13 +1,14 @@
+/* ------------------ TOKENIZER ------------------ */
+
 function tokenize(code) {
-    const tokens = code.match(/'[^']*'|[A-Za-z_]\w*|\d+|\^|==|!=|<=|>=|&|[(){};=+\-*/]/g);
-    return tokens || [];
+    return code.match(/'[^']*'|==|!=|<=|>=|[A-Za-z_]\w*|\d+|[(){};=+\-*/<>]/g) || [];
 }
 
-/* Wait for input inside the fake console */
+/* ------------------ WAIT FOR INPUT ------------------ */
+
 function waitForInput() {
     return new Promise(resolve => {
         const input = document.getElementById("consoleInput");
-
         input.value = "";
         input.focus();
 
@@ -22,7 +23,7 @@ function waitForInput() {
     });
 }
 
-/* ------------------ MATH PARSER (PEMDAS + EXPONENTS) ------------------ */
+/* ------------------ MATH PARSER ------------------ */
 
 function parseMath(tokens) {
     let i = 0;
@@ -33,11 +34,9 @@ function parseMath(tokens) {
         return tokens[i++];
     }
 
-    // Primary: numbers, variables, parentheses
     function primary() {
         let t = peek();
 
-        // Parentheses
         if (t === "(") {
             consume("(");
             let expr = expression();
@@ -45,19 +44,16 @@ function parseMath(tokens) {
             return expr;
         }
 
-        // Negative numbers or negative parentheses
         if (t === "-") {
             consume("-");
             return -primary();
         }
 
-        // Number literal
         if (/^\d+$/.test(t)) {
             consume();
             return Number(t);
         }
 
-        // Variable
         if (/^[A-Za-z_]\w*$/.test(t)) {
             consume();
             return { var: t };
@@ -66,18 +62,16 @@ function parseMath(tokens) {
         throw "SyntaxError: invalid math token " + t;
     }
 
-    // Exponentiation (right-associative)
     function exponent() {
         let left = primary();
         while (peek() === "^") {
             consume("^");
-            let right = exponent(); // right-associative
+            let right = exponent();
             left = { op: "^", left, right };
         }
         return left;
     }
 
-    // Multiplication / Division
     function term() {
         let left = exponent();
         while (peek() === "*" || peek() === "/") {
@@ -88,7 +82,6 @@ function parseMath(tokens) {
         return left;
     }
 
-    // Addition / Subtraction
     function expression() {
         let left = term();
         while (peek() === "+" || peek() === "-") {
@@ -128,6 +121,17 @@ function evalMath(node, vars) {
     throw "SyntaxError: invalid math operation";
 }
 
+/* ------------------ CONDITION EVALUATOR ------------------ */
+
+function evalCondition(expr, vars) {
+    const replaced = expr.replace(/\b[A-Za-z_]\w*\b/g, name => {
+        if (name in vars) return JSON.stringify(vars[name]);
+        return name;
+    });
+
+    return Function(`return (${replaced});`)();
+}
+
 /* ------------------ EXECUTION ENGINE ------------------ */
 
 async function execute(commands, vars = {}) {
@@ -138,29 +142,69 @@ async function execute(commands, vars = {}) {
         output.scrollTop = output.scrollHeight;
     }
 
+    let blockStack = [];
+
     for (let cmd of commands) {
         const op = cmd[0];
 
-        /* say('a' & b & str(10+5)) */
+        /* ---- BLOCK CONTROL ---- */
+
+        if (op === "if_start") {
+            const cond = cmd[1];
+            const result = evalCondition(cond, vars);
+
+            blockStack.push({
+                type: "if",
+                active: result,
+                branchTaken: result
+            });
+            continue;
+        }
+
+        if (op === "or_start") {
+            const block = blockStack[blockStack.length - 1];
+            const cond = cmd[1];
+            const result = evalCondition(cond, vars);
+
+            block.active = !block.branchTaken && result;
+            if (result) block.branchTaken = true;
+
+            continue;
+        }
+
+        if (op === "else_start") {
+            const block = blockStack[blockStack.length - 1];
+
+            block.active = !block.branchTaken;
+            block.branchTaken = true;
+
+            continue;
+        }
+
+        if (op === "end_block") {
+            blockStack.pop();
+            continue;
+        }
+
+        if (blockStack.some(b => !b.active)) continue;
+
+        /* ---- NORMAL COMMANDS ---- */
+
         if (op === "say_concat") {
             let parts = cmd[1];
             let out = "";
 
             for (let p of parts) {
-
-                // str(...) literalizer
                 if (p.startsWith("str(") && p.endsWith(")")) {
-                    out += p.slice(4, -1); // literal inside str()
+                    out += p.slice(4, -1);
                     continue;
                 }
 
-                // string literal
                 if (p[0] === "'" && p[p.length - 1] === "'") {
                     out += p.substring(1, p.length - 1);
                     continue;
                 }
 
-                // math expression inside say()
                 if (/[\d()+\-*/^]/.test(p)) {
                     let mtokens = tokenize(p);
                     let tree = parseMath(mtokens);
@@ -168,7 +212,6 @@ async function execute(commands, vars = {}) {
                     continue;
                 }
 
-                // variable
                 if (p in vars) {
                     out += vars[p];
                     continue;
@@ -178,25 +221,23 @@ async function execute(commands, vars = {}) {
             }
 
             print(out);
+            continue;
         }
 
-        /* var(name) */
-        else if (op === "var_decl") {
+        if (op === "var_decl") {
             vars[cmd[1]] = null;
+            continue;
         }
 
-        /* var(name) = value */
-        else if (op === "var_set") {
+        if (op === "var_set") {
             const name = cmd[1];
             const value = cmd[2];
 
-            // string literal
             if (value[0] === "'" && value[value.length - 1] === "'") {
                 vars[name] = value.substring(1, value.length - 1);
                 continue;
             }
 
-            // math expression
             if (/[\d()+\-*/^]/.test(value)) {
                 let mtokens = tokenize(value);
                 let tree = parseMath(mtokens);
@@ -204,7 +245,6 @@ async function execute(commands, vars = {}) {
                 continue;
             }
 
-            // variable assignment
             if (value in vars) {
                 vars[name] = vars[value];
                 continue;
@@ -213,10 +253,10 @@ async function execute(commands, vars = {}) {
             throw "SyntaxError: invalid assignment value " + value;
         }
 
-        /* ret(name) */
-        else if (op === "input") {
+        if (op === "input") {
             const name = cmd[1];
             vars[name] = await waitForInput();
+            continue;
         }
     }
 
@@ -234,7 +274,55 @@ function parse(tokens) {
 
         if (tok === ";") { i++; continue; }
 
-        /* say(...) */
+        /* ---- IF ---- */
+        if (tok === "if" && tokens[i+1] === "(") {
+            let j = i + 2;
+            let cond = "";
+
+            while (tokens[j] !== ")") {
+                cond += tokens[j];
+                j++;
+            }
+
+            if (tokens[j+1] !== "{") throw "SyntaxError: expected {";
+
+            commands.push(["if_start", cond]);
+            i = j + 2;
+            continue;
+        }
+
+        /* ---- OR ---- */
+        if (tok === "}" && tokens[i+1] === "or" && tokens[i+2] === "(") {
+            let j = i + 3;
+            let cond = "";
+
+            while (tokens[j] !== ")") {
+                cond += tokens[j];
+                j++;
+            }
+
+            if (tokens[j+1] !== "{") throw "SyntaxError: expected {";
+
+            commands.push(["or_start", cond]);
+            i = j + 2;
+            continue;
+        }
+
+        /* ---- ELSE ---- */
+        if (tok === "}" && tokens[i+1] === "else" && tokens[i+2] === "{") {
+            commands.push(["else_start"]);
+            i += 3;
+            continue;
+        }
+
+        /* ---- END BLOCK ---- */
+        if (tok === "}") {
+            commands.push(["end_block"]);
+            i++;
+            continue;
+        }
+
+        /* ---- SAY ---- */
         if (tok === "say") {
             if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
 
@@ -253,7 +341,7 @@ function parse(tokens) {
             continue;
         }
 
-        /* var(name) or var(name) = value */
+        /* ---- VAR ---- */
         if (tok === "var") {
             if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
             const name = tokens[i+2];
@@ -270,7 +358,7 @@ function parse(tokens) {
             continue;
         }
 
-        /* ret(name) */
+        /* ---- INPUT ---- */
         if (tok === "ret") {
             if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
             const name = tokens[i+2];
@@ -292,17 +380,6 @@ async function runPyC(code) {
     const tokens = tokenize(code);
     const commands = parse(tokens);
     return await execute(commands);
-}
-
-function runPyCFromEditor() {
-    const output = document.getElementById("output");
-    output.innerHTML = "";
-
-    const code = document.getElementById("codeBox").value;
-
-    runPyC(code).catch(err => {
-        output.innerHTML += "<span style='color:red'>" + err + "</span>";
-    });
 }
 
 document.getElementById("runBtn").addEventListener("click", () => {
