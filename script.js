@@ -139,6 +139,7 @@ function evalCondition(text, vars) {
     throw "ConditionError: invalid operator " + op;
 }
 
+
 /* ============================================================
         INPUT HANDLER
 ============================================================ */
@@ -241,11 +242,13 @@ function parse(tokens) {
     while (i < tokens.length) {
         const tok = tokens[i];
 
+        /* FUNCTION DEF */
         if (tok === "def") {
             parseFunction();
             continue;
         }
 
+        /* FUNCTION CALL (user-defined only) */
         if (
             /^[A-Za-z_]\w*$/.test(tok) &&
             tokens[i+1] === "(" &&
@@ -255,8 +258,10 @@ function parse(tokens) {
             continue;
         }
 
+        /* SEMICOLON */
         if (tok === ";") { i++; continue; }
 
+        /* IF */
         if (tok === "if" && tokens[i+1] === "(") {
             let j = i + 2;
             let cond = "";
@@ -267,6 +272,7 @@ function parse(tokens) {
             continue;
         }
 
+        /* OR */
         if (tok === "}" && tokens[i+1] === "or" && tokens[i+2] === "(") {
             let j = i + 3;
             let cond = "";
@@ -277,12 +283,14 @@ function parse(tokens) {
             continue;
         }
 
+        /* ELSE */
         if (tok === "}" && tokens[i+1] === "else" && tokens[i+2] === "{") {
             commands.push(["else_start"]);
             i += 3;
             continue;
         }
 
+        /* FOR */
         if (tok === "for" && tokens[i+1] === "(") {
             let j = i + 2;
 
@@ -304,12 +312,14 @@ function parse(tokens) {
             continue;
         }
 
+        /* END BLOCK */
         if (tok === "}") {
             commands.push(["end_block"]);
             i++;
             continue;
         }
 
+        /* SAY */
         if (tok === "say") {
             if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
             let j = i + 2;
@@ -332,6 +342,7 @@ function parse(tokens) {
             continue;
         }
 
+        /* VAR */
         if (tok === "var") {
             if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
             const name = tokens[i+2];
@@ -347,6 +358,7 @@ function parse(tokens) {
             continue;
         }
 
+        /* INPUT */
         if (tok === "ret") {
             if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
             const name = tokens[i+2];
