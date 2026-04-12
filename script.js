@@ -102,45 +102,6 @@ function evalMath(node, vars) {
 }
 
 /* ============================================================
-        CONDITION EVALUATOR
-============================================================ */
-
-function evalCondition(text, vars) {
-    let tokens = tokenize(text);
-
-    let left = "";
-    let op = "";
-    let right = "";
-
-    let i = 0;
-    while (i < tokens.length && !["==","!=",">","<",">=","<="].includes(tokens[i])) {
-        left += tokens[i];
-        i++;
-    }
-
-    op = tokens[i++];
-    while (i < tokens.length) {
-        right += tokens[i];
-        i++;
-    }
-
-    let L = evalValue(left.trim(), vars);
-    let R = evalValue(right.trim(), vars);
-
-    switch (op) {
-        case "==": return L == R;
-        case "!=": return L != R;
-        case ">":  return L > R;
-        case "<":  return L < R;
-        case ">=": return L >= R;
-        case "<=": return L <= R;
-    }
-
-    throw "ConditionError: invalid operator " + op;
-}
-
-
-/* ============================================================
         INPUT HANDLER
 ============================================================ */
 
@@ -416,6 +377,48 @@ async function execute(commands, globalVars = {}) {
         throw "Unknown value: " + token;
     }
 
+    /* ============================================================
+            CONDITION EVALUATOR (correct location)
+    ============================================================ */
+
+    function evalCondition(text, vars) {
+        let tokens = tokenize(text);
+
+        let left = "";
+        let op = "";
+        let right = "";
+
+        let i = 0;
+        while (i < tokens.length && !["==","!=",">","<",">=","<="].includes(tokens[i])) {
+            left += tokens[i];
+            i++;
+        }
+
+        op = tokens[i++];
+        while (i < tokens.length) {
+            right += tokens[i];
+            i++;
+        }
+
+        let L = evalValue(left.trim(), vars);
+        let R = evalValue(right.trim(), vars);
+
+        switch (op) {
+            case "==": return L == R;
+            case "!=": return L != R;
+            case ">":  return L > R;
+            case "<":  return L < R;
+            case ">=": return L >= R;
+            case "<=": return L <= R;
+        }
+
+        throw "ConditionError: invalid operator " + op;
+    }
+
+    /* ============================================================
+            FOR HELPERS
+    ============================================================ */
+
     function runForInit(text, vars) {
         if (text.startsWith("var(")) {
             let name = text.slice(4, text.indexOf(")"));
@@ -438,6 +441,10 @@ async function execute(commands, globalVars = {}) {
         else if (text.startsWith("-")) vars[text.slice(1)]--;
         else throw "Invalid for increment: " + text;
     }
+
+    /* ============================================================
+            MAIN EXECUTION LOOP
+    ============================================================ */
 
     while (callStack.length > 0) {
         let frame = callStack[callStack.length - 1];
@@ -475,6 +482,7 @@ async function execute(commands, globalVars = {}) {
             callStack.push({
                 vars: local,
                 commands: parse(tokenize(def.body.join(" "))),
+
                 ip: 0
             });
 
