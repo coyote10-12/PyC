@@ -3,10 +3,6 @@
 ============================================================ */
 
 function tokenize(code) {
-    // Supports:
-    // def name(a, b) { }
-    // name(5, 5)
-    // flexible spacing
     return code.match(/'[^']*'|==|!=|<=|>=|def|[A-Za-z_]\w*|\d+|[(){};,=+\-*/<>]/g) || [];
 }
 
