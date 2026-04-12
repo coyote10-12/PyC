@@ -541,3 +541,31 @@ document.getElementById("codeBox").addEventListener("keydown", function(e) {
         }
     }
 });
+
+/* ============================================================
+        RUNNER
+============================================================ */
+
+async function runPyC(code) {
+    const tokens = tokenize(code);
+    console.log("TOKENS:", tokens);
+
+    const commands = parse(tokens);
+    console.log("COMMANDS:", commands);
+
+    const vars = await execute(commands, {});
+    console.log("FINAL VARS:", vars);
+}
+
+document.getElementById("runBtn").addEventListener("click", () => {
+    const output = document.getElementById("output");
+    output.innerHTML = "";
+
+    const code = document.getElementById("codeBox").value;
+
+    runPyC(code).catch(err => {
+        output.innerHTML += `<span style="color:red">${err}</span>`;
+        console.error(err);
+    });
+});
+
