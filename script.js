@@ -304,3 +304,14 @@ function runPyCFromEditor() {
         output.innerHTML += "<span style='color:red'>" + err + "</span>";
     });
 }
+
+document.getElementById("runBtn").addEventListener("click", () => {
+    const output = document.getElementById("output");
+    output.innerHTML = "";
+
+    const code = document.getElementById("codeBox").value;
+
+    runPyC(code).catch(err => {
+        output.innerHTML += `<span style="color:red">${err}</span>`;
+    });
+});
