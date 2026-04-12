@@ -141,6 +141,217 @@ function evalCondition(expr, vars) {
 }
 
 /* ============================================================
+        PARSER
+============================================================ */
+
+function parse(tokens) {
+    const commands = [];
+    let i = 0;
+
+    while (i < tokens.length) {
+        const tok = tokens[i];
+
+        if (tok === ";") {
+            i++;
+            continue;
+        }
+
+        /* ---------------- IF ---------------- */
+        if (tok === "if" && tokens[i+1] === "(") {
+            let j = i + 2;
+            let cond = "";
+
+            while (tokens[j] !== ")") {
+                if (j >= tokens.length) throw "SyntaxError: missing ) in if";
+                cond += tokens[j];
+                j++;
+            }
+
+            if (tokens[j+1] !== "{") throw "SyntaxError: expected { after if(...)";
+
+            commands.push(["if_start", cond]);
+            i = j + 2;
+            continue;
+        }
+
+        /* ---------------- OR ---------------- */
+        if (tok === "}" && tokens[i+1] === "or" && tokens[i+2] === "(") {
+            let j = i + 3;
+            let cond = "";
+
+            while (tokens[j] !== ")") {
+                if (j >= tokens.length) throw "SyntaxError: missing ) in or";
+                cond += tokens[j];
+                j++;
+            }
+
+            if (tokens[j+1] !== "{") throw "SyntaxError: expected { after } or (...)";
+
+            commands.push(["or_start", cond]);
+            i = j + 2;
+            continue;
+        }
+
+        /* ---------------- ELSE ---------------- */
+        if (tok === "}" && tokens[i+1] === "else" && tokens[i+2] === "{") {
+            commands.push(["else_start"]);
+            i += 3;
+            continue;
+        }
+
+        /* ---------------- FOR ---------------- */
+        if (tok === "for" && tokens[i+1] === "(") {
+            let j = i + 2;
+
+            /* ---- initializer ---- */
+            let init = "";
+            while (tokens[j] !== ";") {
+                if (j >= tokens.length) throw "SyntaxError: missing ; in for initializer";
+                init += tokens[j];
+                j++;
+            }
+            j++; // skip ;
+
+            /* ---- condition ---- */
+            let cond = "";
+            while (tokens[j] !== ";") {
+                if (j >= tokens.length) throw "SyntaxError: missing ; in for condition";
+                cond += tokens[j];
+                j++;
+            }
+            j++; // skip ;
+
+            /* ---- increment ---- */
+            let inc = "";
+            while (tokens[j] !== ")") {
+                if (j >= tokens.length) throw "SyntaxError: missing ) in for increment";
+                inc += tokens[j];
+                j++;
+            }
+
+            if (tokens[j+1] !== "{") throw "SyntaxError: expected { after for(...)";
+
+            commands.push(["for_start", init, cond, inc]);
+            i = j + 2;
+            continue;
+        }
+
+        /* ---------------- END BLOCK ---------------- */
+        if (tok === "}") {
+            commands.push(["end_block"]);
+            i++;
+            continue;
+        }
+
+        /* ---------------- SAY ---------------- */
+        if (tok === "say") {
+            if (tokens[i+1] !== "(") throw "SyntaxError: expected ( after say";
+
+            let j = i + 2;
+            let parts = [];
+
+            while (tokens[j] !== ")") {
+                if (tokens[j] === "&") {
+                    j++;
+                    continue;
+                }
+                parts.push(tokens[j]);
+                j++;
+                if (j >= tokens.length) throw "SyntaxError: missing ) in say(...)";
+            }
+
+            commands.push(["say_concat", parts]);
+            i = j + 1;
+            continue;
+        }
+
+        /* ---------------- VAR ---------------- */
+        if (tok === "var") {
+            if (tokens[i+1] !== "(") throw "SyntaxError: expected ( after var";
+            const name = tokens[i+2];
+            if (tokens[i+3] !== ")") throw "SyntaxError: expected ) after var(name)";
+
+            if (tokens[i+4] === "=") {
+                const value = tokens[i+5];
+                commands.push(["var_set", name, value]);
+                i += 6;
+            } else {
+                commands.push(["var_decl", name]);
+                i += 4;
+            }
+            continue;
+        }
+
+        /* ---------------- INPUT ---------------- */
+        if (tok === "ret") {
+            if (tokens[i+1] !== "(") throw "SyntaxError: expected ( after ret";
+            const name = tokens[i+2];
+            if (tokens[i+3] !== ")") throw "SyntaxError: expected ) after ret(name)";
+            commands.push(["input", name]);
+            i += 4;
+            continue;
+        }
+
+        throw "Unknown token: " + tok;
+    }
+
+    return commands;
+}
+
+/* ============================================================
+        FOR HELPERS
+============================================================ */
+
+function runForInit(text, vars) {
+    // Allowed:
+    // var(i)=0
+    // i=0
+
+    if (text.startsWith("var(")) {
+        let name = text.slice(4, text.indexOf(")"));
+        let value = text.split("=")[1];
+
+        if (!/^\d+$/.test(value)) throw "For initializer must assign a number";
+        vars[name] = Number(value);
+        return;
+    }
+
+    // i=0
+    if (text.includes("=")) {
+        let [name, value] = text.split("=");
+
+        if (!(name in vars)) throw "Variable " + name + " not declared";
+        if (!/^\d+$/.test(value)) throw "For initializer must assign a number";
+
+        vars[name] = Number(value);
+        return;
+    }
+
+    throw "Invalid for initializer: " + text;
+}
+
+function runForInc(text, vars) {
+    // Only +i or -i allowed
+    if (text.startsWith("+")) {
+        let name = text.slice(1);
+        if (!(name in vars)) throw "Variable " + name + " not declared";
+        if (typeof vars[name] !== "number") throw "Increment requires numeric variable";
+        vars[name]++;
+        return;
+    }
+
+    if (text.startsWith("-")) {
+        let name = text.slice(1);
+        if (!(name in vars)) throw "Variable " + name + " not declared";
+        if (typeof vars[name] !== "number") throw "Decrement requires numeric variable";
+        vars[name]--;
+        return;
+    }
+
+    throw "Invalid for increment: " + text;
+}
+
+/* ============================================================
         EXECUTION ENGINE
 ============================================================ */
 
@@ -192,9 +403,34 @@ async function execute(commands, vars = {}) {
             continue;
         }
 
+        /* ---------------- FOR ---------------- */
+        if (op === "for_start") {
+            const init = cmd[1];
+            const cond = cmd[2];
+            const inc = cmd[3];
+
+            runForInit(init, vars);
+
+            blockStack.push({
+                type: "for",
+                cond,
+                inc,
+                active: evalCondition(cond, vars)
+            });
+            continue;
+        }
+
         /* ---------------- END BLOCK ---------------- */
         if (op === "end_block") {
-            blockStack.pop();
+            const block = blockStack.pop();
+
+            if (block.type === "for") {
+                runForInc(block.inc, vars);
+
+                if (evalCondition(block.cond, vars)) {
+                    blockStack.push(block);
+                }
+            }
             continue;
         }
 
@@ -207,7 +443,7 @@ async function execute(commands, vars = {}) {
             let out = "";
 
             for (let p of parts) {
-                if (p.startsWith("str(") && p.endsWith(")")) {
+                if (p.startsWith("str(") && p.endsendsWith(")")) {
                     out += p.slice(4, -1);
                     continue;
                 }
@@ -279,119 +515,6 @@ async function execute(commands, vars = {}) {
 }
 
 /* ============================================================
-        PARSER
-============================================================ */
-
-function parse(tokens) {
-    const commands = [];
-    let i = 0;
-
-    while (i < tokens.length) {
-        const tok = tokens[i];
-
-        if (tok === ";") { i++; continue; }
-
-        /* ---- IF ---- */
-        if (tok === "if" && tokens[i+1] === "(") {
-            let j = i + 2;
-            let cond = "";
-
-            while (tokens[j] !== ")") {
-                cond += tokens[j];
-                j++;
-            }
-
-            if (tokens[j+1] !== "{") throw "SyntaxError: expected {";
-
-            commands.push(["if_start", cond]);
-            i = j + 2;
-            continue;
-        }
-
-        /* ---- OR ---- */
-        if (tok === "}" && tokens[i+1] === "or" && tokens[i+2] === "(") {
-            let j = i + 3;
-            let cond = "";
-
-            while (tokens[j] !== ")") {
-                cond += tokens[j];
-                j++;
-            }
-
-            if (tokens[j+1] !== "{") throw "SyntaxError: expected {";
-
-            commands.push(["or_start", cond]);
-            i = j + 2;
-            continue;
-        }
-
-        /* ---- ELSE ---- */
-        if (tok === "}" && tokens[i+1] === "else" && tokens[i+2] === "{") {
-            commands.push(["else_start"]);
-            i += 3;
-            continue;
-        }
-
-        /* ---- END BLOCK ---- */
-        if (tok === "}") {
-            commands.push(["end_block"]);
-            i++;
-            continue;
-        }
-
-        /* ---- SAY ---- */
-        if (tok === "say") {
-            if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
-
-            let j = i + 2;
-            let parts = [];
-
-            while (tokens[j] !== ")") {
-                if (tokens[j] === "&") { j++; continue; }
-                parts.push(tokens[j]);
-                j++;
-                if (j >= tokens.length) throw "SyntaxError: missing )";
-            }
-
-            commands.push(["say_concat", parts]);
-            i = j + 1;
-            continue;
-        }
-
-        /* ---- VAR ---- */
-        if (tok === "var") {
-            if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
-            const name = tokens[i+2];
-            if (tokens[i+3] !== ")") throw "SyntaxError: expected )";
-
-            if (tokens[i+4] === "=") {
-                const value = tokens[i+5];
-                commands.push(["var_set", name, value]);
-                i += 6;
-            } else {
-                commands.push(["var_decl", name]);
-                i += 4;
-            }
-            continue;
-        }
-
-        /* ---- INPUT ---- */
-        if (tok === "ret") {
-            if (tokens[i+1] !== "(") throw "SyntaxError: expected (";
-            const name = tokens[i+2];
-            if (tokens[i+3] !== ")") throw "SyntaxError: expected )";
-            commands.push(["input", name]);
-            i += 4;
-            continue;
-        }
-
-        throw "Unknown token: " + tok;
-    }
-
-    return commands;
-}
-
-/* ============================================================
         RUNNER
 ============================================================ */
 
@@ -423,14 +546,18 @@ document.getElementById("codeBox").addEventListener("keydown", function(e) {
         const before = textarea.value.slice(0, start);
         const after = textarea.value.slice(start);
 
+        // If the line ends with "{", auto-insert:
+        // {
+        //     <cursor>
+        // }
         if (before.endsWith("{")) {
             e.preventDefault();
 
-            const insert =
-                "\n\t\n}";
+            const insert = "\n\t\n}";
 
             textarea.value = before + insert + after;
 
+            // Cursor goes on the indented blank line
             textarea.selectionStart = textarea.selectionEnd = start + 2;
         }
     }
