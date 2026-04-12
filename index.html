@@ -1,28 +1,33 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>PyC console</title>
+    <title>PyC Console</title>
     <link rel="stylesheet" href="file.css">
 </head>
 <body>
 
 <div id="container">
-    <div id="editor">
+
+    <!-- Editor Panel -->
+    <section id="editor">
         <h2>PyC Code</h2>
         <textarea id="codeBox">say('Hello from PyC')</textarea>
-        <button onclick="runPyCFromEditor()">Run</button>
-    </div>
+        <button id="runBtn">Run</button>
+    </section>
 
-    <div id="console">
+    <!-- Console Panel -->
+    <section id="console">
         <h2>PyC Console</h2>
+
         <div id="output"></div>
 
         <div id="inputArea">
             <span>&gt;</span>
             <input id="consoleInput" autocomplete="off">
         </div>
-    </div>
+    </section>
+
 </div>
 
 <script src="script.js"></script>
