@@ -254,6 +254,24 @@ function parse(tokens) {
     return commands;
 }
 
+/* ---------------- FUNCTION CALL (user-defined only) ---------------- */
+if (
+    /^[A-Za-z_]\w*$/.test(tok) &&
+    tokens[i+1] === "(" &&
+    tok !== "if" &&
+    tok !== "for" &&
+    tok !== "var" &&
+    tok !== "say" &&
+    tok !== "ret" &&
+    tok !== "def" &&
+    tok !== "or" &&
+    tok !== "else"
+) {
+    parseFunctionCall(tok);
+    continue;
+}
+
+
 /* ============================================================
         FUNCTION EXECUTION ENGINE
 ============================================================ */
