@@ -274,11 +274,12 @@ function parse(tokens) {
         }
 
         /* END BLOCK */
-        if (tok === "}") {
+        if (tok === "}" && !inFunction) {
             commands.push(["end_block"]);
             i++;
             continue;
         }
+
 
         /* SAY */
         if (tok === "say") {
@@ -552,7 +553,6 @@ async function execute(commands, globalVars = {}) {
         if (frame.blockStack && frame.blockStack.some(b => !b.active)) continue;
 
         if (op === "say_concat") {
-            console.log("VARS:", vars);
             let out = "";
             for (let p of cmd[1]) out += evalValue(p, vars);
             print(out);
