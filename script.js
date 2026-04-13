@@ -12,7 +12,6 @@ function tokenize(code) {
 
 function parseMath(tokens) {
     let i = 0;
-        console.log("TOKENS:", tokens);
 
     function parseExpression() {
         let node = parseTerm();
