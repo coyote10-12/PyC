@@ -140,6 +140,8 @@ function waitForInput() {
 ============================================================ */
 
 function parse(tokens) {
+        
+        console.log("TOKENS:", tokens);
     const commands = [];
     let i = 0;
     const functions = {};
