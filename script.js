@@ -399,8 +399,7 @@ async function execute(commands, globalVars = {}) {
             right += tokens[i];
             i++;
         }
-console.log("EVAL COND:", text, "→", left, op, right);
-
+        console.log("EVAL COND:", text, "→", left, op, right);
         let L = evalValue(left.trim(), vars);
         let R = evalValue(right.trim(), vars);
 
