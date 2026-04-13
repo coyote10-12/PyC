@@ -140,8 +140,6 @@ function waitForInput() {
 ============================================================ */
 
 function parse(tokens) {
-        
-        console.log("TOKENS:", tokens);
     const commands = [];
     let i = 0;
     const functions = {};
@@ -401,6 +399,7 @@ async function execute(commands, globalVars = {}) {
             right += tokens[i];
             i++;
         }
+console.log("EVAL COND:", text, "→", left, op, right);
 
         let L = evalValue(left.trim(), vars);
         let R = evalValue(right.trim(), vars);
