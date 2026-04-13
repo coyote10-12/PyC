@@ -140,11 +140,13 @@ function waitForInput() {
 ============================================================ */
 
 function parse(tokens) {
+    let inFunction = false;
     const commands = [];
     let i = 0;
     const functions = {};
 
     function parseFunction() {
+        inFunction = true;
         i++; // skip def
 
         const name = tokens[i++];
@@ -175,6 +177,7 @@ function parse(tokens) {
         }
 
         functions[name] = { params, body };
+        inFunction = false;
     }
 
     function parseFunctionCall(name) {
@@ -554,7 +557,7 @@ async function execute(commands, globalVars = {}) {
 
         if (op === "say_concat") {
             let out = "";
-            for (let p of cmd[1]) out += evalValue(p, vars);
+            for (let p of cmd[1]) out += String(evalValue(p, vars));
             print(out);
             continue;
         }
