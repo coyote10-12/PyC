@@ -452,6 +452,8 @@ async function execute(commands, globalVars = {}) {
         let frame = callStack[callStack.length - 1];
         let { vars, commands, ip } = frame;
 
+        if (!frame.blockStack) frame.blockStack = [];
+
         if (ip >= commands.length) {
             callStack.pop();
             continue;
