@@ -139,8 +139,8 @@ function waitForInput() {
         PARSER (with functions)
 ============================================================ */
 
-function parse(tokens) {
-    let inFunction = false;
+function parse(tokens, insideFunction = false) {
+    let inFunction = insideFunction;
     const commands = [];
     let i = 0;
     const functions = {};
@@ -387,7 +387,6 @@ async function execute(commands, globalVars = {}) {
 
     function evalCondition(text, vars) {
         let tokens = tokenize(text);
-
         let left = "";
         let op = "";
         let right = "";
@@ -484,7 +483,7 @@ async function execute(commands, globalVars = {}) {
 
             callStack.push({
                 vars: local,
-                commands: parse(tokenize(def.body.join(" "))),
+                commands: parse(tokenize(def.body.join(" ")), true),
 
                 ip: 0
             });
